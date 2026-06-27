@@ -13,11 +13,12 @@ type ReservationService interface {
 	BookSpot(userID uint, req *dto.CreateReservationRequest) (*dto.ReservationResponse, error)
 	CancelReservation(userID uint, resID uint) (*dto.ReservationResponse, error)
 	GetDriverReservations(userID uint) ([]dto.ReservationResponse, error)
+	GetAllReservations() ([]models.Reservation, error) // ✅ ইন্টারফেসে এটি যুক্ত করা হলো
 }
 
 type reservationService struct {
 	repo     repository.ReservationRepository
-	zoneRepo repository.ZoneRepository // To fetch price per hour safely
+	zoneRepo repository.ZoneRepository
 }
 
 func NewReservationService(repo repository.ReservationRepository, zoneRepo repository.ZoneRepository) ReservationService {
@@ -61,7 +62,7 @@ func (s *reservationService) BookSpot(userID uint, req *dto.CreateReservationReq
 		UserID:       newRes.UserID,
 		ZoneID:       newRes.ZoneID,
 		LicensePlate: newRes.LicensePlate,
-		Status:       newRes.Status,
+		Status:       "active",
 		StartTime:    newRes.CreatedAt,
 		EndTime:      newRes.UpdatedAt,
 		TotalCost:    0.0,
@@ -92,11 +93,10 @@ func (s *reservationService) CancelReservation(userID uint, resID uint) (*dto.Re
 			return err
 		}
 
-		// Calculate cost: EndTime (UpdatedAt) - StartTime (CreatedAt)
 		duration := res.UpdatedAt.Sub(res.CreatedAt)
 		hoursSpent := duration.Hours()
 
-		if hoursSpent < 0.02 { // Grace period under 1 min
+		if hoursSpent < 0.02 {
 			totalCost = 0.0
 		} else {
 			totalCost = math.Ceil(hoursSpent) * zone.PricePerHour
@@ -131,7 +131,6 @@ func (s *reservationService) GetDriverReservations(userID uint) ([]dto.Reservati
 	var res []dto.ReservationResponse
 	for _, r := range reservations {
 		var totalCost float64
-		// Fetch zone details to get the rate for dynamic calculation
 		zone, _ := s.zoneRepo.FindByID(r.ZoneID)
 
 		if r.Status != "active" && zone != nil {
@@ -154,4 +153,8 @@ func (s *reservationService) GetDriverReservations(userID uint) ([]dto.Reservati
 		})
 	}
 	return res, nil
+}
+
+func (s *reservationService) GetAllReservations() ([]models.Reservation, error) {
+	return s.repo.GetAll()
 }

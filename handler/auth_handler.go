@@ -14,12 +14,10 @@ type AuthHandler struct {
 	validator *validator.Validate
 }
 
-// NewAuthHandler injects the AuthService and Validator dependencies
 func NewAuthHandler(srv service.AuthService, v *validator.Validate) *AuthHandler {
 	return &AuthHandler{srv: srv, validator: v}
 }
 
-// Register handles driver/admin registration
 func (h *AuthHandler) Register(c echo.Context) error {
 	req := new(dto.RegisterRequest)
 	if err := c.Bind(req); err != nil {
@@ -28,8 +26,6 @@ func (h *AuthHandler) Register(c echo.Context) error {
 			"message": "Invalid request payload",
 		})
 	}
-
-	// Validate required fields, email format, and password length
 	if err := h.validator.Struct(req); err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{
 			"success": false,
@@ -53,7 +49,6 @@ func (h *AuthHandler) Register(c echo.Context) error {
 	})
 }
 
-// Login handles driver/admin authentication
 func (h *AuthHandler) Login(c echo.Context) error {
 	req := new(dto.LoginRequest)
 	if err := c.Bind(req); err != nil {
@@ -63,7 +58,6 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		})
 	}
 
-	// Validate login inputs
 	if err := h.validator.Struct(req); err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{
 			"success": false,
@@ -71,7 +65,6 @@ func (h *AuthHandler) Login(c echo.Context) error {
 			"errors":  err.Error(),
 		})
 	}
-
 	res, err := h.srv.LoginUser(req)
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, echo.Map{
@@ -79,7 +72,6 @@ func (h *AuthHandler) Login(c echo.Context) error {
 			"message": err.Error(),
 		})
 	}
-
 	return c.JSON(http.StatusOK, echo.Map{
 		"success": true,
 		"message": "Login successful",

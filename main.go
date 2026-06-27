@@ -18,7 +18,6 @@ import (
 )
 
 func main() {
-
 	if err := godotenv.Load(); err != nil {
 		log.Println("Warning: No .env file found, reading from system environment variables")
 	}
@@ -48,29 +47,33 @@ func main() {
 	resSrv := service.NewReservationService(resRepo, zoneRepo)
 	resHandler := handler.NewReservationHandler(resSrv, v)
 
-	api := e.Group("/api")
+	api := e.Group("/api/v1")
 	api.POST("/auth/register", authHandler.Register)
 	api.POST("/auth/login", authHandler.Login)
 
 	protected := api.Group("")
 	protected.Use(customMiddleware.JWTMiddleware)
 
-	protected.GET("/zones", zoneHandler.GetAll)
-	protected.GET("/zones/:id", zoneHandler.GetByID)
+	// Public routes
+	api.GET("/zones", zoneHandler.GetAll)
+	api.GET("/zones/:id", zoneHandler.GetByID)
 
+	//Admin only routes
 	adminOnly := protected.Group("")
 	adminOnly.Use(customMiddleware.RequireAdmin)
 	adminOnly.POST("/zones", zoneHandler.Create)
+	adminOnly.GET("/reservations", resHandler.GetAllReservations)
 
+	// Authenticated user routes - driver & admin
 	protected.POST("/reservations", resHandler.Book)
-	protected.POST("/reservations/:id/cancel", resHandler.Cancel)
-	protected.GET("/reservations/my", resHandler.GetMyReservations)
+	protected.GET("/reservations/my-reservations", resHandler.GetMyReservations)
+	protected.DELETE("/reservations/:id", resHandler.Cancel)
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	log.Printf("🚀 Server is running smoothly on port %s", port)
+	log.Printf("Server is running on port %s", port)
 	e.Logger.Fatal(e.Start(":" + port))
 }

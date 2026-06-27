@@ -41,7 +41,6 @@ func (r *zoneRepository) FindByID(id uint) (*models.ParkingZone, error) {
 
 func (r *zoneRepository) GetActiveReservationsCount(zoneID uint) (int64, error) {
 	var count int64
-	// অ্যাসাইনমেন্টের নিয়ম অনুযায়ী শুধুমাত্র 'active' বুকিংগুলো কাউন্ট হবে
 	err := r.db.Model(&models.Reservation{}).Where("zone_id = ? AND status = ?", zoneID, "active").Count(&count).Error
 	return count, err
 }

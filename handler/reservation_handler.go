@@ -77,3 +77,18 @@ func (h *ReservationHandler) GetMyReservations(c echo.Context) error {
 		"data":    res,
 	})
 }
+
+func (h *ReservationHandler) GetAllReservations(c echo.Context) error {
+	res, err := h.srv.GetAllReservations()
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{
+			"success": false,
+			"message": err.Error(),
+		})
+	}
+	return c.JSON(http.StatusOK, echo.Map{
+		"success": true,
+		"message": "All reservations retrieved successfully",
+		"data":    res,
+	})
+}

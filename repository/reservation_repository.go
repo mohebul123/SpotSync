@@ -13,6 +13,7 @@ type ReservationRepository interface {
 	FindByIDAndUserID(id uint, userID uint) (*models.Reservation, error)
 	Update(res *models.Reservation) error
 	FindAllByUserID(userID uint) ([]models.Reservation, error)
+	GetAll() ([]models.Reservation, error)
 }
 
 type reservationRepository struct {
@@ -23,7 +24,6 @@ func NewReservationRepository(db *gorm.DB) ReservationRepository {
 	return &reservationRepository{db: db}
 }
 
-// WithTransaction creates a database transaction block
 func (r *reservationRepository) WithTransaction(txFunc func(txRepo ReservationRepository) error) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		txRepo := &reservationRepository{db: tx}
@@ -31,10 +31,8 @@ func (r *reservationRepository) WithTransaction(txFunc func(txRepo ReservationRe
 	})
 }
 
-// GetZoneForUpdate locks the specific zone row to prevent race conditions
 func (r *reservationRepository) GetZoneForUpdate(zoneID uint) (*models.ParkingZone, error) {
 	var zone models.ParkingZone
-	// FOR UPDATE locks this row until the transaction finishes
 	err := r.db.Raw("SELECT * FROM parking_zones WHERE id = ? FOR UPDATE", zoneID).Scan(&zone).Error
 	if err != nil {
 		return nil, err
@@ -71,5 +69,11 @@ func (r *reservationRepository) Update(res *models.Reservation) error {
 func (r *reservationRepository) FindAllByUserID(userID uint) ([]models.Reservation, error) {
 	var reservations []models.Reservation
 	err := r.db.Where("user_id = ?", userID).Order("created_at desc").Find(&reservations).Error
+	return reservations, err
+}
+
+func (r *reservationRepository) GetAll() ([]models.Reservation, error) {
+	var reservations []models.Reservation
+	err := r.db.Order("id desc").Find(&reservations).Error
 	return reservations, err
 }
