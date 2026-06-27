@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/mohebul123/SpotSync/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -33,16 +34,21 @@ func ConnectDatabase() {
 		log.Fatal("Failed to connect to database:", err)
 	}
 
-	// Technical Interview Requirement: Connection Pooling Configuration
 	sqlDB, err := database.DB()
 	if err != nil {
 		log.Fatal("Failed to get generic database object:", err)
 	}
 
-	sqlDB.SetMaxIdleConns(10)               // Maximum number of idle connections
-	sqlDB.SetMaxOpenConns(100)              // Maximum number of open connections
-	sqlDB.SetConnMaxLifetime(time.Hour * 1) // Re-use connection lifetime
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetMaxOpenConns(100)
+	sqlDB.SetConnMaxLifetime(time.Hour * 1)
 
 	DB = database
+	// Auto Migrate the Models
+	err = database.AutoMigrate(&models.User{}, &models.ParkingZone{}, &models.Reservation{})
+	if err != nil {
+		log.Fatal("Failed to run database migration:", err)
+	}
+	log.Println("Database migration completed successfully.")
 	log.Println("Database connection successfully established with pooling configuration.")
 }

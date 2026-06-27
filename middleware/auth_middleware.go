@@ -9,7 +9,6 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// JWTMiddleware checks for a valid bearer token and extracts user data
 func JWTMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		authHeader := c.Request().Header.Get("Authorization")
@@ -47,7 +46,6 @@ func JWTMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 			})
 		}
 
-		// Extract claims and inject into Echo Context
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
 			return c.JSON(http.StatusUnauthorized, echo.Map{
@@ -56,15 +54,12 @@ func JWTMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 			})
 		}
 
-		// Store userID and role as float64/string in context safely
 		c.Set("userID", uint(claims["user_id"].(float64)))
 		c.Set("role", claims["role"].(string))
 
 		return next(c)
 	}
 }
-
-// RequireAdmin middleware ensures the requester has the 'admin' role
 func RequireAdmin(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		role, ok := c.Get("role").(string)

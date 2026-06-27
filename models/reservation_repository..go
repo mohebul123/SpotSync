@@ -11,7 +11,7 @@ type Reservation struct {
 	ZoneID       uint        `gorm:"not null" json:"zone_id"`
 	Zone         ParkingZone `gorm:"foreignKey:ZoneID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT;" json:"zone,omitempty"`
 	LicensePlate string      `gorm:"type:varchar(15);not null" json:"license_plate"`
-	Status       string      `gorm:"type:varchar(50);default:'active';not null" json:"status"`
+	Status       string      `gorm:"type:varchar(50);default:'active';not null" json:"status"` // active, completed, cancelled
 	CreatedAt    time.Time   `json:"created_at"`
 	UpdatedAt    time.Time   `json:"updated_at"`
 }
