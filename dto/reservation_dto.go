@@ -1,0 +1,19 @@
+package dto
+
+import "time"
+
+type CreateReservationRequest struct {
+	ZoneID       uint   `json:"zone_id" validate:"required"`
+	LicensePlate string `json:"license_plate" validate:"required,max=15"`
+}
+
+type ReservationResponse struct {
+	ID           uint      `json:"id"`
+	UserID       uint      `json:"user_id"`
+	ZoneID       uint      `json:"zone_id"`
+	LicensePlate string    `json:"license_plate"`
+	Status       string    `json:"status"`
+	StartTime    time.Time `json:"start_time"` // Maps to CreatedAt
+	EndTime      time.Time `json:"end_time"`   // Maps to UpdatedAt
+	TotalCost    float64   `json:"total_cost"` // Dynamically calculated
+}
