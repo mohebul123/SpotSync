@@ -48,6 +48,14 @@ func main() {
 	resHandler := handler.NewReservationHandler(resSrv, v)
 
 	api := e.Group("/api/v1")
+	api.GET("/", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"success": true,
+			"message": "Welcome to SpotSync API! The server is running....",
+			"version": "v1.0.0",
+		})
+	})
+
 	api.POST("/auth/register", authHandler.Register)
 	api.POST("/auth/login", authHandler.Login)
 
@@ -73,6 +81,6 @@ func main() {
 		port = "8080"
 	}
 
-	log.Printf("Server is running smoothly on port %s", port)
+	log.Printf("Server is running on port %s", port)
 	e.Logger.Fatal(e.Start(":" + port))
 }
