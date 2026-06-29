@@ -2,7 +2,6 @@ package service
 
 import (
 	"errors"
-	"math"
 
 	"github.com/mohebul123/SpotSync/dto"
 	"github.com/mohebul123/SpotSync/models"
@@ -10,10 +9,10 @@ import (
 )
 
 type ReservationService interface {
-	BookSpot(userID uint, req *dto.CreateReservationRequest) (*dto.ReservationResponse, error)
-	CancelReservation(userID uint, resID uint) (*dto.ReservationResponse, error)
-	GetDriverReservations(userID uint) ([]dto.ReservationResponse, error)
-	GetAllReservations() ([]models.Reservation, error) // ✅ ইন্টারফেসে এটি যুক্ত করা হলো
+	BookSpot(userID uint, req *dto.CreateReservationRequest) (*dto.ReservationWithZoneResponse, error)
+	CancelReservation(userID uint, resID uint) error
+	GetDriverReservations(userID uint) ([]dto.ReservationWithZoneResponse, error)
+	GetAllReservations() ([]dto.ReservationWithZoneResponse, error)
 }
 
 type reservationService struct {
@@ -25,13 +24,21 @@ func NewReservationService(repo repository.ReservationRepository, zoneRepo repos
 	return &reservationService{repo: repo, zoneRepo: zoneRepo}
 }
 
-func (s *reservationService) BookSpot(userID uint, req *dto.CreateReservationRequest) (*dto.ReservationResponse, error) {
+func (s *reservationService) BookSpot(userID uint, req *dto.CreateReservationRequest) (*dto.ReservationWithZoneResponse, error) {
 	var newRes models.Reservation
 
 	err := s.repo.WithTransaction(func(txRepo repository.ReservationRepository) error {
 		zone, err := txRepo.GetZoneForUpdate(req.ZoneID)
 		if err != nil {
 			return errors.New("parking zone not found")
+		}
+
+		exists, err := txRepo.ExistsActiveByLicensePlate(req.LicensePlate)
+		if err != nil {
+			return err
+		}
+		if exists {
+			return errors.New("this vehicle already has an active reservation")
 		}
 
 		activeCount, err := txRepo.CountActiveReservations(req.ZoneID)
@@ -57,104 +64,117 @@ func (s *reservationService) BookSpot(userID uint, req *dto.CreateReservationReq
 		return nil, err
 	}
 
-	return &dto.ReservationResponse{
-		ID:           newRes.ID,
-		UserID:       newRes.UserID,
-		ZoneID:       newRes.ZoneID,
+	zone, _ := s.zoneRepo.FindByID(newRes.ZoneID)
+	activeCount, _ := s.zoneRepo.GetActiveReservationsCount(zone.ID)
+	available := zone.TotalCapacity - int(activeCount)
+
+	return &dto.ReservationWithZoneResponse{
+		ID:     newRes.ID,
+		UserID: newRes.UserID,
+		ZoneID: newRes.ZoneID,
+		Zone: dto.ZoneResponse{
+			ID:             zone.ID,
+			Name:           zone.Name,
+			Type:           zone.Type,
+			TotalCapacity:  zone.TotalCapacity,
+			AvailableSpots: available,
+			PricePerHour:   zone.PricePerHour,
+			CreatedAt:      zone.CreatedAt,
+			UpdatedAt:      zone.UpdatedAt,
+		},
 		LicensePlate: newRes.LicensePlate,
-		Status:       "active",
-		StartTime:    newRes.CreatedAt,
-		EndTime:      newRes.UpdatedAt,
-		TotalCost:    0.0,
+		Status:       newRes.Status,
+		CreatedAt:    newRes.CreatedAt,
+		UpdatedAt:    newRes.UpdatedAt,
 	}, nil
 }
 
-func (s *reservationService) CancelReservation(userID uint, resID uint) (*dto.ReservationResponse, error) {
-	var updatedRes *models.Reservation
-	var totalCost float64
-
-	err := s.repo.WithTransaction(func(txRepo repository.ReservationRepository) error {
-		res, err := txRepo.FindByIDAndUserID(resID, userID)
+func (s *reservationService) CancelReservation(userID uint, resID uint) error {
+	return s.repo.WithTransaction(func(txRepo repository.ReservationRepository) error {
+		res, err := txRepo.FindByID(resID)
 		if err != nil {
-			return errors.New("active reservation not found")
+			return errors.New("reservation not found")
+		}
+
+		if res.UserID != userID {
+			return errors.New("forbidden: you can only cancel your own reservation")
 		}
 
 		if res.Status != "active" {
 			return errors.New("reservation is already completed or cancelled")
 		}
 
-		zone, err := txRepo.GetZoneForUpdate(res.ZoneID)
-		if err != nil {
-			return err
-		}
-
 		res.Status = "cancelled"
-		if err := txRepo.Update(res); err != nil {
-			return err
-		}
-
-		duration := res.UpdatedAt.Sub(res.CreatedAt)
-		hoursSpent := duration.Hours()
-
-		if hoursSpent < 0.02 {
-			totalCost = 0.0
-		} else {
-			totalCost = math.Ceil(hoursSpent) * zone.PricePerHour
-		}
-
-		updatedRes = res
-		return nil
+		return txRepo.Update(res)
 	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &dto.ReservationResponse{
-		ID:           updatedRes.ID,
-		UserID:       updatedRes.UserID,
-		ZoneID:       updatedRes.ZoneID,
-		LicensePlate: updatedRes.LicensePlate,
-		Status:       updatedRes.Status,
-		StartTime:    updatedRes.CreatedAt,
-		EndTime:      updatedRes.UpdatedAt,
-		TotalCost:    totalCost,
-	}, nil
 }
 
-func (s *reservationService) GetDriverReservations(userID uint) ([]dto.ReservationResponse, error) {
+func (s *reservationService) GetDriverReservations(userID uint) ([]dto.ReservationWithZoneResponse, error) {
 	reservations, err := s.repo.FindAllByUserID(userID)
 	if err != nil {
 		return nil, err
 	}
 
-	var res []dto.ReservationResponse
+	var res []dto.ReservationWithZoneResponse
 	for _, r := range reservations {
-		var totalCost float64
 		zone, _ := s.zoneRepo.FindByID(r.ZoneID)
+		activeCount, _ := s.zoneRepo.GetActiveReservationsCount(zone.ID)
+		available := zone.TotalCapacity - int(activeCount)
 
-		if r.Status != "active" && zone != nil {
-			duration := r.UpdatedAt.Sub(r.CreatedAt)
-			hours := duration.Hours()
-			if hours > 0.02 {
-				totalCost = math.Ceil(hours) * zone.PricePerHour
-			}
-		}
-
-		res = append(res, dto.ReservationResponse{
-			ID:           r.ID,
-			UserID:       r.UserID,
-			ZoneID:       r.ZoneID,
+		res = append(res, dto.ReservationWithZoneResponse{
+			ID:     r.ID,
+			UserID: r.UserID,
+			ZoneID: r.ZoneID,
+			Zone: dto.ZoneResponse{
+				ID:             zone.ID,
+				Name:           zone.Name,
+				Type:           zone.Type,
+				TotalCapacity:  zone.TotalCapacity,
+				AvailableSpots: available,
+				PricePerHour:   zone.PricePerHour,
+				CreatedAt:      zone.CreatedAt,
+				UpdatedAt:      zone.UpdatedAt,
+			},
 			LicensePlate: r.LicensePlate,
 			Status:       r.Status,
-			StartTime:    r.CreatedAt,
-			EndTime:      r.UpdatedAt,
-			TotalCost:    totalCost,
+			CreatedAt:    r.CreatedAt,
+			UpdatedAt:    r.UpdatedAt,
 		})
 	}
 	return res, nil
 }
 
-func (s *reservationService) GetAllReservations() ([]models.Reservation, error) {
-	return s.repo.GetAll()
+func (s *reservationService) GetAllReservations() ([]dto.ReservationWithZoneResponse, error) {
+	reservations, err := s.repo.GetAll()
+	if err != nil {
+		return nil, err
+	}
+
+	var res []dto.ReservationWithZoneResponse
+	for _, r := range reservations {
+		zone, _ := s.zoneRepo.FindByID(r.ZoneID)
+		activeCount, _ := s.zoneRepo.GetActiveReservationsCount(zone.ID)
+		available := zone.TotalCapacity - int(activeCount)
+
+		res = append(res, dto.ReservationWithZoneResponse{
+			ID:     r.ID,
+			UserID: r.UserID,
+			ZoneID: r.ZoneID,
+			Zone: dto.ZoneResponse{
+				ID:             zone.ID,
+				Name:           zone.Name,
+				Type:           zone.Type,
+				TotalCapacity:  zone.TotalCapacity,
+				AvailableSpots: available,
+				PricePerHour:   zone.PricePerHour,
+				CreatedAt:      zone.CreatedAt,
+				UpdatedAt:      zone.UpdatedAt,
+			},
+			LicensePlate: r.LicensePlate,
+			Status:       r.Status,
+			CreatedAt:    r.CreatedAt,
+			UpdatedAt:    r.UpdatedAt,
+		})
+	}
+	return res, nil
 }

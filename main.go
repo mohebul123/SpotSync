@@ -54,17 +54,16 @@ func main() {
 	protected := api.Group("")
 	protected.Use(customMiddleware.JWTMiddleware)
 
-	// Public routes
 	api.GET("/zones", zoneHandler.GetAll)
 	api.GET("/zones/:id", zoneHandler.GetByID)
 
-	//Admin only routes
 	adminOnly := protected.Group("")
 	adminOnly.Use(customMiddleware.RequireAdmin)
 	adminOnly.POST("/zones", zoneHandler.Create)
 	adminOnly.GET("/reservations", resHandler.GetAllReservations)
+	adminOnly.PUT("/zones/:id", zoneHandler.Update)
+	adminOnly.DELETE("/zones/:id", zoneHandler.Delete)
 
-	// Authenticated user routes - driver & admin
 	protected.POST("/reservations", resHandler.Book)
 	protected.GET("/reservations/my-reservations", resHandler.GetMyReservations)
 	protected.DELETE("/reservations/:id", resHandler.Cancel)
@@ -74,6 +73,6 @@ func main() {
 		port = "8080"
 	}
 
-	log.Printf("Server is running on port %s", port)
+	log.Printf("Server is running smoothly on port %s", port)
 	e.Logger.Fatal(e.Start(":" + port))
 }

@@ -10,10 +10,11 @@ type ReservationRepository interface {
 	GetZoneForUpdate(zoneID uint) (*models.ParkingZone, error)
 	CountActiveReservations(zoneID uint) (int64, error)
 	Create(res *models.Reservation) error
-	FindByIDAndUserID(id uint, userID uint) (*models.Reservation, error)
+	FindByID(id uint) (*models.Reservation, error)
 	Update(res *models.Reservation) error
 	FindAllByUserID(userID uint) ([]models.Reservation, error)
 	GetAll() ([]models.Reservation, error)
+	ExistsActiveByLicensePlate(licensePlate string) (bool, error)
 }
 
 type reservationRepository struct {
@@ -53,9 +54,9 @@ func (r *reservationRepository) Create(res *models.Reservation) error {
 	return r.db.Create(res).Error
 }
 
-func (r *reservationRepository) FindByIDAndUserID(id uint, userID uint) (*models.Reservation, error) {
+func (r *reservationRepository) FindByID(id uint) (*models.Reservation, error) {
 	var res models.Reservation
-	err := r.db.Where("id = ? AND user_id = ?", id, userID).First(&res).Error
+	err := r.db.Preload("Zone").First(&res, id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -68,12 +69,20 @@ func (r *reservationRepository) Update(res *models.Reservation) error {
 
 func (r *reservationRepository) FindAllByUserID(userID uint) ([]models.Reservation, error) {
 	var reservations []models.Reservation
-	err := r.db.Where("user_id = ?", userID).Order("created_at desc").Find(&reservations).Error
+
+	err := r.db.Preload("Zone").Where("user_id = ?", userID).Order("created_at desc").Find(&reservations).Error
 	return reservations, err
 }
 
 func (r *reservationRepository) GetAll() ([]models.Reservation, error) {
 	var reservations []models.Reservation
-	err := r.db.Order("id desc").Find(&reservations).Error
+
+	err := r.db.Preload("Zone").Order("id desc").Find(&reservations).Error
 	return reservations, err
+}
+
+func (r *reservationRepository) ExistsActiveByLicensePlate(licensePlate string) (bool, error) {
+	var count int64
+	err := r.db.Model(&models.Reservation{}).Where("license_plate = ? AND status = ?", licensePlate, "active").Count(&count).Error
+	return count > 0, err
 }

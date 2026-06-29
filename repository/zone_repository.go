@@ -10,6 +10,8 @@ type ZoneRepository interface {
 	FindAll() ([]models.ParkingZone, error)
 	FindByID(id uint) (*models.ParkingZone, error)
 	GetActiveReservationsCount(zoneID uint) (int64, error)
+	Update(zone *models.ParkingZone) error
+	Delete(id uint) error
 }
 
 type zoneRepository struct {
@@ -43,4 +45,12 @@ func (r *zoneRepository) GetActiveReservationsCount(zoneID uint) (int64, error) 
 	var count int64
 	err := r.db.Model(&models.Reservation{}).Where("zone_id = ? AND status = ?", zoneID, "active").Count(&count).Error
 	return count, err
+}
+
+func (r *zoneRepository) Update(zone *models.ParkingZone) error {
+	return r.db.Save(zone).Error
+}
+
+func (r *zoneRepository) Delete(id uint) error {
+	return r.db.Delete(&models.ParkingZone{}, id).Error
 }

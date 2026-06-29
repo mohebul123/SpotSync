@@ -1,6 +1,8 @@
 package service
 
 import (
+	"errors"
+
 	"github.com/mohebul123/SpotSync/dto"
 	"github.com/mohebul123/SpotSync/models"
 	"github.com/mohebul123/SpotSync/repository"
@@ -10,6 +12,8 @@ type ZoneService interface {
 	CreateZone(req *dto.CreateZoneRequest) (*dto.ZoneResponse, error)
 	GetAllZones() ([]dto.ZoneResponse, error)
 	GetZoneByID(id uint) (*dto.ZoneResponse, error)
+	UpdateZone(id uint, req *dto.UpdateZoneRequest) (*dto.ZoneResponse, error)
+	DeleteZone(id uint) error
 }
 
 type zoneService struct {
@@ -63,6 +67,7 @@ func (s *zoneService) GetAllZones() ([]dto.ZoneResponse, error) {
 			AvailableSpots: available,
 			PricePerHour:   zone.PricePerHour,
 			CreatedAt:      zone.CreatedAt,
+			UpdatedAt:      zone.UpdatedAt,
 		})
 	}
 	return res, nil
@@ -87,4 +92,42 @@ func (s *zoneService) GetZoneByID(id uint) (*dto.ZoneResponse, error) {
 		CreatedAt:      zone.CreatedAt,
 		UpdatedAt:      zone.UpdatedAt,
 	}, nil
+}
+
+func (s *zoneService) UpdateZone(id uint, req *dto.UpdateZoneRequest) (*dto.ZoneResponse, error) {
+	zone, err := s.repo.FindByID(id)
+	if err != nil {
+		return nil, errors.New("parking zone not found")
+	}
+
+	zone.Name = req.Name
+	zone.Type = req.Type
+	zone.TotalCapacity = req.TotalCapacity
+	zone.PricePerHour = req.PricePerHour
+
+	if err := s.repo.Update(zone); err != nil {
+		return nil, err
+	}
+
+	activeCount, _ := s.repo.GetActiveReservationsCount(zone.ID)
+	available := zone.TotalCapacity - int(activeCount)
+
+	return &dto.ZoneResponse{
+		ID:             zone.ID,
+		Name:           zone.Name,
+		Type:           zone.Type,
+		TotalCapacity:  zone.TotalCapacity,
+		AvailableSpots: available,
+		PricePerHour:   zone.PricePerHour,
+		CreatedAt:      zone.CreatedAt,
+		UpdatedAt:      zone.UpdatedAt,
+	}, nil
+}
+
+func (s *zoneService) DeleteZone(id uint) error {
+	_, err := s.repo.FindByID(id)
+	if err != nil {
+		return errors.New("parking zone not found")
+	}
+	return s.repo.Delete(id)
 }
